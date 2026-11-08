@@ -6,52 +6,54 @@ Self-hosted [n8n](https://n8n.io) deployed from this repo, using
 
 ## Architecture
 
-- **App**: n8n 2.46.6, official Docker image, deployed on Render (free web service).
+- **App**: n8n 2.46.6, official Docker image, deployed on Render (free web service,
+  Oregon region, service `dhruv-n8n`).
 - **Database**: Neon Postgres, project `n8n` (`winter-resonance-19303458`),
   branch `production` (`br-fancy-grass-b3jf99hu`), region `aws-ap-southeast-1`.
 - **DNS / TLS**: Cloudflare, `n8n.dhruvmulani.com` CNAME to the Render host,
   proxied; Render issues the TLS cert for the custom domain.
-- **Connection**: the container reads a single `DATABASE_URL` secret and derives
-  n8n's `DB_POSTGRESDB_*` variables at boot (`derive-db-env.mjs`). Use the
-  **direct/unpooled** Neon URL so n8n keeps its own connection pool.
+- **Connection**: n8n reads `DB_POSTGRESDB_*` from Render env vars, populated
+  from the **direct/unpooled** Neon URL so n8n keeps its own connection pool.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `Dockerfile` | Extends the official n8n image with the env-derivation entrypoint. |
-| `start.sh` | Derives DB vars from `DATABASE_URL`, then execs `n8n start`. |
-| `derive-db-env.mjs` | Parses the Postgres URL into `DB_POSTGRESDB_*` exports. |
+| `Dockerfile` | Pins the official n8n image and starts it with `n8n start`. |
 | `render.yaml` | Render Blueprint: Docker service, health check, env, free plan. |
 | `neon.ts` | Neon branch policy. |
 | `.env.example` | Every variable n8n needs, with no secrets. |
 
-## Deploy (Render Blueprint)
+## Deploy (Render)
 
-1. Push this repo to GitHub.
-2. In Render: **New > Blueprint**, connect the repo.
-3. When prompted for `DATABASE_URL`, paste the **unpooled** Neon connection
-   string for the `production` branch:
+The service is created from this repo with:
 
-   ```bash
-   neon connection-string production --project-id winter-resonance-19303458
-   ```
+- Runtime `docker`, plan `free`, region `oregon`, branch `master`
+- Health check `/healthz`
+- `DB_POSTGRESDB_*` env vars from the unpooled Neon connection string
+- `N8N_ENCRYPTION_KEY` generated once and kept stable
 
-4. Deploy. Render builds the Dockerfile and starts n8n on port `10000`.
-5. In Render, add the custom domain `n8n.dhruvmulani.com` to the service, then
-   create the DNS record (Cloudflare, proxied):
+To recreate it, open Render, **New > Blueprint**, connect this repo, and fill the
+`sync: false` values (`DB_POSTGRESDB_HOST`, `USER`, `PASSWORD`, `DATABASE`) from:
 
-   ```bash
-   wrangler dns record create dhruvmulani.com \
-     --name n8n --type CNAME \
-     --content <service>.onrender.com --proxied
-   ```
+```bash
+neon connection-string production --project-id winter-resonance-19303458
+```
+
+Then add the custom domain `n8n.dhruvmulani.com` to the service and create the
+Cloudflare record:
+
+```bash
+wrangler dns record create dhruvmulani.com \
+  --name n8n --type CNAME \
+  --content dhruv-n8n-pkei.onrender.com --proxied
+```
 
 ## Local run against Neon
 
 ```bash
 cp .env.example .env
-# fill DATABASE_URL and N8N_ENCRYPTION_KEY
+# fill DB_POSTGRESDB_* and N8N_ENCRYPTION_KEY
 set -a; . ./.env; set +a
 npx n8n@2.46.6 start
 ```
@@ -60,7 +62,7 @@ Then open <http://localhost:5678>, create the owner account, and confirm the
 Postgres tables exist:
 
 ```bash
-npx -p pg node -e "const {Client}=require('pg');const c=new Client({connectionString:process.env.DATABASE_URL});c.connect().then(()=>c.query(\"select tablename from pg_tables where schemaname='public' order by 1\")).then(r=>{console.table(r.rows);return c.end()})"
+npx -p pg node -e "const {Client}=require('pg');const c=new Client({host:process.env.DB_POSTGRESDB_HOST,port:+process.env.DB_POSTGRESDB_PORT,user:process.env.DB_POSTGRESDB_USER,password:process.env.DB_POSTGRESDB_PASSWORD,database:process.env.DB_POSTGRESDB_DATABASE,ssl:{rejectUnauthorized:true}});c.connect().then(()=>c.query(\"select count(*) from pg_tables where schemaname='public'\")).then(r=>{console.log(r.rows);return c.end()})"
 ```
 
 ## Notes / limits

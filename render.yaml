@@ -1,11 +1,11 @@
 services:
   - type: web
-    name: n8n
+    name: dhruv-n8n
     runtime: docker
     plan: free
     region: oregon
     dockerfilePath: ./Dockerfile
-    dockerCommand: /usr/local/bin/start.sh
+    dockerCommand: start
     healthCheckPath: /healthz
     autoDeploy: true
     envVars:
@@ -35,7 +35,23 @@ services:
         value: "true"
       - key: EXECUTIONS_DATA_MAX_AGE
         value: "168"
+      - key: DB_TYPE
+        value: postgresdb
+      - key: DB_POSTGRESDB_HOST
+        sync: false
+      - key: DB_POSTGRESDB_PORT
+        value: "5432"
+      - key: DB_POSTGRESDB_USER
+        sync: false
+      - key: DB_POSTGRESDB_PASSWORD
+        sync: false
+      - key: DB_POSTGRESDB_DATABASE
+        sync: false
+      - key: DB_POSTGRESDB_SCHEMA
+        value: public
+      - key: DB_POSTGRESDB_SSL_ENABLED
+        value: "true"
+      - key: DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED
+        value: "true"
       - key: DB_POSTGRESDB_POOL_SIZE
         value: "5"
-      - key: DATABASE_URL
-        sync: false
