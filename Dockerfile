@@ -6,3 +6,4 @@ COPY start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh \
   && chown node:node /usr/local/bin/start.sh /usr/local/bin/derive-db-env.mjs
 USER node
+CMD ["/usr/local/bin/start.sh"]
